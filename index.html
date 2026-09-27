@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebGL 体积渲染 - 光线步进</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>体积渲染（WebGL 光线步进）</h1>
+    <div id="mode-badge" class="badge">初始化…</div>
+  </header>
+
+  <main>
+    <section class="viewport">
+      <canvas id="gl-canvas" width="720" height="560"></canvas>
+      <canvas id="slice-canvas" width="720" height="560" hidden></canvas>
+      <div id="stats" class="stats">
+        <span>FPS: <b id="stat-fps">--</b></span>
+        <span>帧耗时: <b id="stat-frame">--</b> ms</span>
+        <span>步进次数: <b id="stat-steps">--</b></span>
+        <span>模式: <b id="stat-mode">--</b></span>
+        <span>长任务: <b id="stat-longtask">0</b></span>
+      </div>
+      <div id="notice" class="notice" hidden></div>
+    </section>
+
+    <aside class="panel">
+      <details open>
+        <summary>渲染</summary>
+        <label>渲染模式
+          <select id="sel-mode">
+            <option value="auto">自动（检测能力）</option>
+            <option value="volume">强制体积渲染</option>
+            <option value="slice">强制切片渲染</option>
+          </select>
+        </label>
+        <label>步进次数 <span id="lbl-steps">256</span>
+          <input type="range" id="rng-steps" min="32" max="512" step="16" value="256">
+        </label>
+        <label>不透明度增益 <span id="lbl-alpha">1.0</span>
+          <input type="range" id="rng-alpha" min="0.1" max="4" step="0.1" value="1">
+        </label>
+        <label>缩放（相机距离）<span id="lbl-zoom">2.6</span>
+          <input type="range" id="rng-zoom" min="1.2" max="6" step="0.05" value="2.6">
+        </label>
+        <label class="chk"><input type="checkbox" id="chk-auto" checked> 帧率不足时自动降低步进</label>
+      </details>
+
+      <details open>
+        <summary>传输函数</summary>
+        <canvas id="tf-canvas" width="260" height="130"></canvas>
+        <div class="row">
+          <select id="sel-preset">
+            <option value="ct">CT 骨骼</option>
+            <option value="hot">热力</option>
+            <option value="cool">冷色</option>
+            <option value="gray">灰度</option>
+          </select>
+          <button id="btn-tf-reset">重置曲线</button>
+        </div>
+        <p class="hint">拖动节点调透明度；双击空白添加节点；右键删除节点。背景为直方图。</p>
+      </details>
+
+      <details open>
+        <summary>光照</summary>
+        <label>环境光 <span id="lbl-amb">0.25</span>
+          <input type="range" id="rng-amb" min="0" max="1" step="0.05" value="0.25">
+        </label>
+        <label>漫反射 <span id="lbl-diff">0.8</span>
+          <input type="range" id="rng-diff" min="0" max="1.5" step="0.05" value="0.8">
+        </label>
+        <label>高光 <span id="lbl-spec">0.5</span>
+          <input type="range" id="rng-spec" min="0" max="1.5" step="0.05" value="0.5">
+        </label>
+        <label>光源方位 <span id="lbl-light">135°</span>
+          <input type="range" id="rng-light" min="0" max="360" step="5" value="135">
+        </label>
+      </details>
+
+      <details open>
+        <summary>裁剪边界</summary>
+        <label>X <span id="lbl-clipx">0% – 100%</span>
+          <input type="range" id="rng-clipx0" min="0" max="100" value="0">
+          <input type="range" id="rng-clipx1" min="0" max="100" value="100">
+        </label>
+        <label>Y <span id="lbl-clipy">0% – 100%</span>
+          <input type="range" id="rng-clipy0" min="0" max="100" value="0">
+          <input type="range" id="rng-clipy1" min="0" max="100" value="100">
+        </label>
+        <label>Z <span id="lbl-clipz">0% – 100%</span>
+          <input type="range" id="rng-clipz0" min="0" max="100" value="0">
+          <input type="range" id="rng-clipz1" min="0" max="100" value="100">
+        </label>
+        <button id="btn-clip-reset">重置裁剪</button>
+      </details>
+
+      <details id="slice-panel">
+        <summary>切片（降级模式）</summary>
+        <label>轴
+          <select id="sel-axis">
+            <option value="z">Z（轴状面）</option>
+            <option value="y">Y（冠状面）</option>
+            <option value="x">X（矢状面）</option>
+          </select>
+        </label>
+        <label>切片 <span id="lbl-slice">64</span>
+          <input type="range" id="rng-slice" min="0" max="127" value="64">
+        </label>
+      </details>
+
+      <details>
+        <summary>数据</summary>
+        <label>体积分辨率
+          <select id="sel-size">
+            <option value="128" selected>128³</option>
+            <option value="96">96³</option>
+            <option value="64">64³</option>
+            <option value="192">192³</option>
+          </select>
+        </label>
+        <button id="btn-regen">重新生成体积数据</button>
+        <p class="hint">数据在 Web Worker 中程序化生成（TypedArray），并缓存到 IndexedDB。</p>
+      </details>
+    </aside>
+  </main>
+
+  <script src="js/idb.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/tf.js"></script>
+  <script src="js/renderer3d.js"></script>
+  <script src="js/renderer2d.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

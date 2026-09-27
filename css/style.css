@@ -1,0 +1,96 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #14171c;
+  color: #d8dee6;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #1c2129;
+  border-bottom: 1px solid #2b323d;
+}
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+.badge {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: #2b323d;
+  color: #9fb2c8;
+}
+.badge.ok { background: #1e4630; color: #7fe0a8; }
+.badge.warn { background: #4d3a17; color: #f0c36d; }
+.badge.err { background: #4d1f1f; color: #f08a8a; }
+
+main {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.viewport { position: relative; }
+.viewport canvas { display: block; background: #000; border: 1px solid #2b323d; border-radius: 4px; }
+.stats {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  background: rgba(10, 12, 16, 0.72);
+  padding: 5px 10px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+.stats b { color: #7fd4ff; font-variant-numeric: tabular-nums; }
+.notice {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  font-size: 12px;
+  background: rgba(77, 58, 23, 0.9);
+  color: #f0c36d;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.panel {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+details {
+  background: #1c2129;
+  border: 1px solid #2b323d;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+summary { cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+label { display: block; font-size: 12px; margin: 8px 0 2px; color: #aeb9c6; }
+label.chk { display: flex; align-items: center; gap: 6px; }
+input[type="range"] { width: 100%; margin: 2px 0; }
+select, button {
+  background: #262d38;
+  color: #d8dee6;
+  border: 1px solid #3a4350;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+button:hover { background: #303947; }
+.row { display: flex; gap: 8px; margin-top: 6px; }
+.hint { font-size: 11px; color: #7d8896; margin: 6px 0 0; }
+#tf-canvas {
+  width: 100%;
+  border: 1px solid #2b323d;
+  border-radius: 4px;
+  background: #10131a;
+  cursor: crosshair;
+}
