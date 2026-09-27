@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebGL 体积渲染 - 光线步进</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #14161c; color: #d7dae0; overflow: hidden;
+    display: flex; height: 100vh;
+  }
+  #viewport { flex: 1; position: relative; min-width: 0; }
+  #glcanvas { width: 100%; height: 100%; display: block; cursor: grab; }
+  #glcanvas:active { cursor: grabbing; }
+  #hud {
+    position: absolute; top: 10px; left: 10px; padding: 10px 14px;
+    background: rgba(10,12,16,.72); border: 1px solid #2c3140; border-radius: 8px;
+    font-size: 12px; line-height: 1.7; pointer-events: none; white-space: nowrap;
+  }
+  #hud b { color: #7fd4ff; font-weight: 600; }
+  #hud .warn { color: #ffb454; }
+  #hud .ok { color: #7fe0a0; }
+  #banner {
+    position: absolute; top: 10px; right: 10px; max-width: 46%;
+    padding: 8px 12px; border-radius: 8px; font-size: 12px; display: none;
+    background: rgba(80,46,8,.9); border: 1px solid #ffb454; color: #ffd9a0;
+  }
+  #panel {
+    width: 320px; flex: none; overflow-y: auto; padding: 14px;
+    background: #1b1e26; border-left: 1px solid #2c3140; font-size: 13px;
+  }
+  #panel h1 { font-size: 15px; margin-bottom: 10px; color: #7fd4ff; }
+  #panel h2 {
+    font-size: 12px; margin: 14px 0 6px; color: #9aa3b2;
+    text-transform: uppercase; letter-spacing: .06em;
+    border-bottom: 1px solid #2c3140; padding-bottom: 4px;
+  }
+  .row { display: flex; align-items: center; margin: 5px 0; gap: 8px; }
+  .row label { flex: none; width: 88px; color: #aab2c0; }
+  .row output { flex: none; width: 44px; text-align: right; color: #7fd4ff; font-variant-numeric: tabular-nums; }
+  .row input[type=range] { flex: 1; accent-color: #4aa3df; height: 18px; }
+  .row select, .row input[type=number] {
+    flex: 1; background: #12141a; color: #d7dae0; border: 1px solid #39404f;
+    border-radius: 4px; padding: 3px 6px; font-size: 12px;
+  }
+  .row input[type=checkbox] { accent-color: #4aa3df; }
+  button {
+    background: #2a6ea8; color: #fff; border: none; border-radius: 5px;
+    padding: 6px 12px; font-size: 12px; cursor: pointer; margin: 4px 4px 0 0;
+  }
+  button:hover { background: #3583c4; }
+  button.ghost { background: #2c3140; }
+  #tfCanvas {
+    width: 100%; height: 130px; border: 1px solid #39404f; border-radius: 6px;
+    cursor: crosshair; background: #101218; touch-action: none;
+  }
+  .hint { font-size: 11px; color: #6b7385; margin-top: 4px; line-height: 1.5; }
+  #status { font-size: 12px; color: #9aa3b2; margin-top: 6px; min-height: 16px; }
+</style>
+</head>
+<body>
+  <div id="viewport">
+    <canvas id="glcanvas"></canvas>
+    <div id="hud">
+      <div>渲染模式: <b id="hMode">-</b></div>
+      <div>帧率: <b id="hFps">-</b> FPS &nbsp;帧耗时: <b id="hMs">-</b> ms</div>
+      <div>步进次数: <b id="hSteps">-</b> <span id="hAdaptive"></span></div>
+      <div>体积: <b id="hVol">-</b> &nbsp;显存占用≈<b id="hVram">-</b></div>
+      <div>主线程长任务: <b id="hLong">0</b> 次 <span id="hMain" class="ok">●流畅</span></div>
+    </div>
+    <div id="banner"></div>
+  </div>
+
+  <div id="panel">
+    <h1>体积渲染控制台</h1>
+
+    <h2>体积数据</h2>
+    <div class="row">
+      <label>数据类型</label>
+      <select id="volType">
+        <option value="skull">颅骨(程序化)</option>
+        <option value="meta">流星体(程序化)</option>
+        <option value="noise">噪声云(程序化)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>分辨率</label>
+      <select id="volSize">
+        <option value="64">64³</option>
+        <option value="128" selected>128³</option>
+        <option value="192">192³</option>
+        <option value="256">256³</option>
+      </select>
+    </div>
+    <div class="row">
+      <button id="btnReload">重新生成</button>
+      <span id="status"></span>
+    </div>
+
+    <h2>传输函数</h2>
+    <div class="row">
+      <label>预设</label>
+      <select id="tfPreset">
+        <option value="bone">骨骼</option>
+        <option value="rainbow">彩虹</option>
+        <option value="fire">火焰</option>
+        <option value="gray">灰度</option>
+      </select>
+    </div>
+    <canvas id="tfCanvas" width="292" height="130"></canvas>
+    <div class="hint">拖动控制点调整;双击添加控制点;右键删除控制点</div>
+    <div class="row">
+      <label>整体不透明度</label>
+      <input type="range" id="density" min="0.05" max="4" step="0.05" value="1">
+      <output id="densityOut">1.00</output>
+    </div>
+
+    <h2>采样与步进</h2>
+    <div class="row">
+      <label>步进次数</label>
+      <input type="range" id="steps" min="32" max="512" step="8" value="256">
+      <output id="stepsOut">256</output>
+    </div>
+    <div class="row">
+      <label>自适应步进</label>
+      <input type="checkbox" id="adaptive">
+      <span class="hint">低帧率自动降步进,高帧率恢复</span>
+    </div>
+
+    <h2>裁剪边界</h2>
+    <div class="row"><label>X 最小</label><input type="range" class="clip" id="cx0" min="0" max="1" step="0.01" value="0"><output>0.00</output></div>
+    <div class="row"><label>X 最大</label><input type="range" class="clip" id="cx1" min="0" max="1" step="0.01" value="1"><output>1.00</output></div>
+    <div class="row"><label>Y 最小</label><input type="range" class="clip" id="cy0" min="0" max="1" step="0.01" value="0"><output>0.00</output></div>
+    <div class="row"><label>Y 最大</label><input type="range" class="clip" id="cy1" min="0" max="1" step="0.01" value="1"><output>1.00</output></div>
+    <div class="row"><label>Z 最小</label><input type="range" class="clip" id="cz0" min="0" max="1" step="0.01" value="0"><output>0.00</output></div>
+    <div class="row"><label>Z 最大</label><input type="range" class="clip" id="cz1" min="0" max="1" step="0.01" value="1"><output>1.00</output></div>
+    <div class="row"><button class="ghost" id="btnResetClip">重置裁剪</button></div>
+
+    <h2>缩放</h2>
+    <div class="row">
+      <label>体积缩放</label>
+      <input type="range" id="scale" min="0.4" max="2" step="0.05" value="1">
+      <output id="scaleOut">1.00</output>
+    </div>
+    <div class="hint">画布上拖拽旋转,滚轮缩放视角</div>
+
+    <h2>降级测试</h2>
+    <div class="row">
+      <label>禁用 3D 纹理</label>
+      <input type="checkbox" id="forceNo3D">
+      <span class="hint">模拟 WebGL1 环境</span>
+    </div>
+    <div class="row">
+      <label>显存预算 MB</label>
+      <input type="number" id="vramBudget" min="1" max="4096" value="256">
+    </div>
+    <div class="row">
+      <button class="ghost" id="btnApplyDegrade">应用并重建渲染器</button>
+    </div>
+  </div>
+
+  <script src="js/mat4.js"></script>
+  <script src="js/volume.js"></script>
+  <script src="js/tfeditor.js"></script>
+  <script src="js/raymarch.js"></script>
+  <script src="js/slicer.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
